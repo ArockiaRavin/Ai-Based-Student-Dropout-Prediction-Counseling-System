@@ -1,0 +1,40 @@
+services:
+  # 1. EduRetain AI Backend (FastAPI ML Service)
+  - type: web
+    name: eduretain-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        value: sqlite:///student_retention.db
+      - key: ACTIVE_ML_MODEL
+        value: "Random Forest"
+      - key: HIGH_RISK_THRESHOLD
+        value: "65.0"
+      - key: MEDIUM_RISK_THRESHOLD
+        value: "35.0"
+      - key: SECRET_KEY
+        generateValue: true
+
+  # 2. EduRetain AI Frontend (React Vite SPA)
+  - type: web
+    name: eduretain-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://eduretain-backend.onrender.com/api/*
+      - type: rewrite
+        source: /*
+        destination: /index.html

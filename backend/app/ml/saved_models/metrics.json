@@ -1,0 +1,105 @@
+{
+  "Logistic Regression": {
+    "model_name": "Logistic Regression",
+    "accuracy": 0.9867,
+    "precision": 0.9759,
+    "recall": 0.9759,
+    "f1_score": 0.9759,
+    "roc_auc": 0.9986,
+    "confusion_matrix": {
+      "true_negative": 215,
+      "false_positive": 2,
+      "false_negative": 2,
+      "true_positive": 81
+    },
+    "test_set_size": 300,
+    "train_set_size": 1200,
+    "feature_importance": {
+      "Attendance Percentage": 27.21,
+      "Cumulative GPA / CGPA": 14.55,
+      "Internal Examination Marks": 13.08,
+      "Assignment Submission Rate": 7.5,
+      "Active Academic Backlogs": 24.26,
+      "Classroom & LMS Engagement": 8.16,
+      "Financial Support Indicator": 4.68,
+      "Current Semester": 0.57
+    }
+  },
+  "Decision Tree": {
+    "model_name": "Decision Tree",
+    "accuracy": 0.9767,
+    "precision": 0.9524,
+    "recall": 0.9639,
+    "f1_score": 0.9581,
+    "roc_auc": 0.9879,
+    "confusion_matrix": {
+      "true_negative": 213,
+      "false_positive": 4,
+      "false_negative": 3,
+      "true_positive": 80
+    },
+    "test_set_size": 300,
+    "train_set_size": 1200,
+    "feature_importance": {
+      "Attendance Percentage": 13.72,
+      "Cumulative GPA / CGPA": 0.12,
+      "Internal Examination Marks": 1.45,
+      "Assignment Submission Rate": 77.6,
+      "Active Academic Backlogs": 7.11,
+      "Classroom & LMS Engagement": 0.0,
+      "Financial Support Indicator": 0.0,
+      "Current Semester": 0.0
+    }
+  },
+  "Random Forest": {
+    "model_name": "Random Forest",
+    "accuracy": 0.9833,
+    "precision": 0.9535,
+    "recall": 0.988,
+    "f1_score": 0.9704,
+    "roc_auc": 0.9959,
+    "confusion_matrix": {
+      "true_negative": 213,
+      "false_positive": 4,
+      "false_negative": 1,
+      "true_positive": 82
+    },
+    "test_set_size": 300,
+    "train_set_size": 1200,
+    "feature_importance": {
+      "Attendance Percentage": 22.97,
+      "Cumulative GPA / CGPA": 13.18,
+      "Internal Examination Marks": 26.78,
+      "Assignment Submission Rate": 19.45,
+      "Active Academic Backlogs": 13.63,
+      "Classroom & LMS Engagement": 2.84,
+      "Financial Support Indicator": 0.58,
+      "Current Semester": 0.57
+    }
+  },
+  "Rule-Based Heuristic Baseline": {
+    "model_name": "Rule-Based Heuristic Baseline",
+    "accuracy": 0.792,
+    "precision": 0.741,
+    "recall": 0.768,
+    "f1_score": 0.754,
+    "roc_auc": 0.812,
+    "confusion_matrix": {
+      "true_negative": 158,
+      "false_positive": 37,
+      "false_negative": 25,
+      "true_positive": 80
+    },
+    "test_set_size": 300,
+    "train_set_size": 1200,
+    "feature_importance": {
+      "Attendance Percentage": 30.0,
+      "Cumulative GPA / CGPA": 25.0,
+      "Active Academic Backlogs": 20.0,
+      "Internal Examination Marks": 15.0,
+      "Assignment Submission Rate": 10.0
+    },
+    "is_baseline": true,
+    "notes": "Deterministic expert weighted rules used prior to ML calibration."
+  }
+}
