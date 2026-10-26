@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any
 from app.ml.pipeline import ml_system, FEATURE_NAMES_PRETTY, FEATURE_COLS
 from app.database import get_db
+from app.auth_utils import require_role, log_audit
 
 router = APIRouter(prefix="/model", tags=["model"])
 
@@ -42,7 +43,10 @@ def get_model_insights():
     }
 
 @router.post("/set-active")
-def set_active_model(payload: Dict[str, str] = Body(...)):
+def set_active_model(
+    payload: Dict[str, str] = Body(...),
+    current_user: Dict[str, Any] = Depends(require_role(["Administrator"]))
+):
     model_name = payload.get("model_name")
     if not model_name or model_name not in ml_system.metrics:
         raise HTTPException(status_code=400, detail="Invalid model name specified")
@@ -56,24 +60,21 @@ def set_active_model(payload: Dict[str, str] = Body(...)):
             VALUES ('active_ml_model', ?);
         """, (model_name,))
 
-        cursor.execute("""
-            INSERT INTO audit_logs (user_name, action, entity_type, entity_id, details)
-            VALUES (?, ?, ?, ?, ?);
-        """, ("Admin", "SWITCH_ACTIVE_MODEL", "MLPipeline", model_name, f"Set active prediction model to {model_name}"))
+        log_audit(conn, current_user["name"], "SWITCH_ACTIVE_MODEL", "MLPipeline", model_name, f"Set active prediction model to {model_name}")
 
     return {"message": f"Active model successfully changed to {model_name}"}
 
 @router.post("/retrain")
-def retrain_models(payload: Dict[str, Any] = Body(default={})):
+def retrain_models(
+    payload: Dict[str, Any] = Body(default={}),
+    current_user: Dict[str, Any] = Depends(require_role(["Administrator"]))
+):
     n_samples = payload.get("n_samples", 1500)
     results = ml_system.train_and_evaluate_all(n_samples=n_samples)
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO audit_logs (user_name, action, entity_type, entity_id, details)
-            VALUES (?, ?, ?, ?, ?);
-        """, ("Admin", "RETRAIN_MODELS", "MLPipeline", "v2.0", f"Retrained all models on N={n_samples} benchmark samples"))
+        log_audit(conn, current_user["name"], "RETRAIN_MODELS", "MLPipeline", "v2.0", f"Retrained all models on N={n_samples} benchmark samples")
 
     return {
         "message": f"Successfully retrained all models on {n_samples} student records.",

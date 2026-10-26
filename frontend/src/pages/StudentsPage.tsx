@@ -227,11 +227,16 @@ export const StudentsPage: React.FC = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-3 flex-wrap">
             <div className="p-2 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)]">
               <Users className="w-6 h-6" />
             </div>
-            Student Cohort Management
+            <span>Student Cohort Management</span>
+            {!canEditStudents && (
+              <span className="text-[10px] font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 uppercase font-mono">
+                Read-Only Viewer
+              </span>
+            )}
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
             Browse, filter, edit, and import student academic and behavioral profiles with real-time risk predictions.

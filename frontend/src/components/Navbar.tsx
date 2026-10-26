@@ -11,22 +11,28 @@ import {
   CheckCircle,
   Menu,
   X,
-  Sparkles
+  Sparkles,
+  Users,
+  LogOut,
+  LogIn,
+  User as UserIcon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import { NotificationItem } from '../types';
+import { UserManagementModal } from './UserManagementModal';
 
 interface NavbarProps {
   onToggleSidebar?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
-  const { user, role, loginAs } = useAuth();
+  const { user, role, loginAs, logout, isAdmin, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserManagement, setShowUserManagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const todayStr = new Intl.DateTimeFormat('en-US', {
@@ -43,6 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
   }, []);
 
   const loadNotifications = async () => {
+    if (!localStorage.getItem('eduretain_token')) return;
     try {
       const res = await api.getNotifications();
       setNotifications(res.notifications || []);
@@ -205,6 +212,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
             )}
           </div>
 
+          {/* Admin Manage Users Quick Button */}
+          {isAdmin && (
+            <Link
+              to="/manage-users"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-500/30 text-xs font-semibold shadow-[0_0_12px_rgba(99,102,241,0.25)] transition-all hover:scale-[1.02]"
+              title="Manage Users & Assign Roles"
+            >
+              <Users className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden md:inline">Manage Users</span>
+            </Link>
+          )}
+
           {/* Role Switcher for Demonstration */}
           <div className="flex items-center border border-white/10 rounded-xl p-1 bg-white/[0.03] text-xs backdrop-blur-md">
             <button
@@ -241,8 +260,55 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               Viewer
             </button>
           </div>
+
+          {/* Profile Navigation Button */}
+          {user && (
+            <Link
+              to="/profile"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-xs text-white border border-white/10 transition-all hover:border-indigo-500/40 group"
+              title="My Account Profile"
+            >
+              <div className="w-5 h-5 rounded-lg bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center text-[10px] font-bold text-white shadow-xs">
+                {user.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="w-3 h-3 text-white" />}
+              </div>
+              <span className="hidden md:inline font-medium text-slate-200 group-hover:text-white max-w-[110px] truncate">
+                {user.name}
+              </span>
+            </Link>
+          )}
+
+          {/* Sign Out / Sign In Action */}
+          {user ? (
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                navigate('/login');
+              }}
+              className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors border border-transparent hover:border-rose-500/20"
+              title={`Sign Out (${user.name})`}
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          ) : (
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-semibold text-white border border-white/10"
+            >
+              <LogIn className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Sign In</span>
+            </Link>
+          )}
         </div>
       </div>
+
+      {/* Admin User Management Modal */}
+      {isAdmin && (
+        <UserManagementModal
+          isOpen={showUserManagement}
+          onClose={() => setShowUserManagement(false)}
+        />
+      )}
     </header>
   );
 };

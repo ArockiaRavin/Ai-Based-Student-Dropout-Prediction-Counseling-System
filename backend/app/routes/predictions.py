@@ -1,9 +1,10 @@
 import json
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
+from fastapi import APIRouter, HTTPException, Query, Depends
+from typing import Optional, Dict, Any
 from app.database import get_db
 from app.models import PredictionRequest, PredictionResponse
 from app.ml.pipeline import ml_system
+from app.auth_utils import get_optional_user, log_audit
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
@@ -55,7 +56,17 @@ def list_predictions(
         return {"predictions": results, "total": len(results)}
 
 @router.post("")
-def run_prediction(payload: PredictionRequest):
+def run_prediction(
+    payload: PredictionRequest,
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_user)
+):
+    # Viewer restriction: cannot write or modify predictions on student profiles
+    if payload.student_id and current_user and current_user.get("role") == "Viewer":
+        raise HTTPException(
+            status_code=403,
+            detail="Viewer accounts are strictly read-only and cannot record predictions to student records."
+        )
+
     # Execute prediction with requested model or active model
     pred_result = ml_system.predict_student(payload.model_dump(), model_name=payload.model_name)
 

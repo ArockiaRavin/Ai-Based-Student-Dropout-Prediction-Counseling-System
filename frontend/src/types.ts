@@ -181,4 +181,26 @@ export interface User {
   email: string;
   role: 'Administrator' | 'Counselor' | 'Viewer';
   department: string;
+  status?: 'active' | 'pending' | 'deactivated';
+  email_verified?: number | boolean;
+  created_at?: string;
+  last_login?: string;
+}
+
+export interface AuthResponse {
+  token: string | null;
+  message?: string;
+  status?: string;
+  verification_token?: string;
+  user: User;
+}
+
+export interface AuditLogItem {
+  id: number;
+  user_name: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  details: string;
+  timestamp: string;
 }

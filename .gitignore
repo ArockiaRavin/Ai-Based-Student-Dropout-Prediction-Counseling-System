@@ -21,3 +21,8 @@ Thumbs.db
 
 # Local environment
 .env
+.env.*
+*.env
+backend/.admin_setup_key
+!*.env.example
+

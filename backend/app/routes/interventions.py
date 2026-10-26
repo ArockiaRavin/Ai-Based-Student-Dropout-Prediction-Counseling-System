@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional, List
+from fastapi import APIRouter, HTTPException, Query, Depends
+from typing import Optional, List, Dict, Any
 from app.database import get_db
 from app.models import InterventionCreate, InterventionUpdate, InterventionResponse
+from app.auth_utils import require_role, log_audit
 
 router = APIRouter(prefix="/interventions", tags=["interventions"])
 
@@ -82,7 +83,10 @@ def list_interventions(
         }
 
 @router.post("")
-def create_intervention(payload: InterventionCreate):
+def create_intervention(
+    payload: InterventionCreate,
+    current_user: Dict[str, Any] = Depends(require_role(["Administrator", "Counselor"]))
+):
     with get_db() as conn:
         cursor = conn.cursor()
         student = cursor.execute("SELECT first_name, last_name FROM students WHERE student_id = ?;", (payload.student_id,)).fetchone()
@@ -96,15 +100,13 @@ def create_intervention(payload: InterventionCreate):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
         """, (
             payload.student_id, payload.title, payload.description,
-            payload.category, payload.assigned_to, payload.status,
+            payload.category, payload.assigned_to or current_user.get("name", "Counselor"), payload.status,
             payload.target_date, payload.outcome_notes
         ))
         int_id = cursor.lastrowid
 
-        cursor.execute("""
-            INSERT INTO audit_logs (user_name, action, entity_type, entity_id, details)
-            VALUES (?, ?, ?, ?, ?);
-        """, (payload.assigned_to, "CREATE_INTERVENTION", "Intervention", str(int_id), f"Created intervention '{payload.title}' for {student['first_name']} {student['last_name']}"))
+        user_name = current_user.get("name", payload.assigned_to)
+        log_audit(conn, user_name, "CREATE_INTERVENTION", "Intervention", str(int_id), f"Created intervention '{payload.title}' for {student['first_name']} {student['last_name']}")
 
         return {
             "message": "Intervention created successfully",
@@ -112,7 +114,11 @@ def create_intervention(payload: InterventionCreate):
         }
 
 @router.put("/{intervention_id}")
-def update_intervention(intervention_id: int, payload: InterventionUpdate):
+def update_intervention(
+    intervention_id: int,
+    payload: InterventionUpdate,
+    current_user: Dict[str, Any] = Depends(require_role(["Administrator", "Counselor"]))
+):
     with get_db() as conn:
         cursor = conn.cursor()
         item = cursor.execute("SELECT * FROM interventions WHERE id = ?;", (intervention_id,)).fetchone()
@@ -129,9 +135,7 @@ def update_intervention(intervention_id: int, payload: InterventionUpdate):
             values = list(updates.values()) + [intervention_id]
             cursor.execute(f"UPDATE interventions SET {set_clause} WHERE id = ?;", values)
 
-            cursor.execute("""
-                INSERT INTO audit_logs (user_name, action, entity_type, entity_id, details)
-                VALUES (?, ?, ?, ?, ?);
-            """, ("System User", "UPDATE_INTERVENTION", "Intervention", str(intervention_id), f"Updated intervention #{intervention_id} status to {updates.get('status', item['status'])}"))
+            user_name = current_user.get("name", "User")
+            log_audit(conn, user_name, "UPDATE_INTERVENTION", "Intervention", str(intervention_id), f"Updated intervention #{intervention_id} status to {updates.get('status', item['status'])}")
 
         return {"message": "Intervention updated successfully"}

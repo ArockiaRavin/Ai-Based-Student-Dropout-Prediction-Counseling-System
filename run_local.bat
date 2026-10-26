@@ -7,12 +7,12 @@ echo.
 echo [1/2] Starting Python FastAPI Backend on http://127.0.0.1:8000 ...
 start "EduRetain AI - Backend" cmd /k "cd /d %~dp0backend && python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
 
-timeout /t 2 /nobreak >nul
+ping 127.0.0.1 -n 3 >nul
 
 echo [2/2] Starting React + Vite Frontend on http://localhost:5173 ...
 start "EduRetain AI - Frontend" cmd /k "cd /d %~dp0frontend && npm run dev"
 
-timeout /t 3 /nobreak >nul
+ping 127.0.0.1 -n 4 >nul
 
 echo.
 echo Launching Application in default browser...

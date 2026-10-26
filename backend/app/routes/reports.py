@@ -107,8 +107,8 @@ def generate_report(
             dept_stats = cursor.execute("""
                 SELECT s.department,
                        COUNT(s.id) as total_students,
-                       ROUND(AVG(s.attendance_pct), 1) as avg_attendance,
-                       ROUND(AVG(s.gpa), 2) as avg_gpa,
+                       ROUND(CAST(AVG(s.attendance_pct) AS numeric), 1) as avg_attendance,
+                       ROUND(CAST(AVG(s.gpa) AS numeric), 2) as avg_gpa,
                        SUM(CASE WHEN p.risk_category = 'HIGH RISK' THEN 1 ELSE 0 END) as high_risk_count,
                        SUM(CASE WHEN p.risk_category = 'MEDIUM RISK' THEN 1 ELSE 0 END) as medium_risk_count,
                        SUM(CASE WHEN p.risk_category = 'LOW RISK' THEN 1 ELSE 0 END) as low_risk_count

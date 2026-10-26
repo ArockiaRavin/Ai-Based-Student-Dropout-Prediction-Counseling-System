@@ -83,12 +83,12 @@ def get_dashboard_summary():
         """).fetchall()
 
         # 7. Academic Performance Trends: Grouped by Semester average GPA & Internal Marks
-        sem_trends = cursor.execute("""
+        sem_trends_raw = cursor.execute("""
             SELECT s.semester,
-                   ROUND(AVG(s.gpa), 2) as avg_gpa,
-                   ROUND(AVG(s.internal_marks), 1) as avg_internal,
-                   ROUND(AVG(s.attendance_pct), 1) as avg_attendance,
-                   ROUND(AVG(p.risk_score), 1) as avg_risk_score
+                   ROUND(CAST(AVG(s.gpa) AS numeric), 2) as avg_gpa,
+                   ROUND(CAST(AVG(s.internal_marks) AS numeric), 1) as avg_internal,
+                   ROUND(CAST(AVG(s.attendance_pct) AS numeric), 1) as avg_attendance,
+                   ROUND(CAST(AVG(p.risk_score) AS numeric), 1) as avg_risk_score
             FROM students s
             LEFT JOIN (
                 SELECT p1.student_id, p1.risk_score
@@ -98,6 +98,17 @@ def get_dashboard_summary():
             GROUP BY s.semester
             ORDER BY s.semester ASC;
         """).fetchall()
+
+        sem_trends = [
+            {
+                "semester": r["semester"],
+                "avg_gpa": float(r["avg_gpa"]) if r.get("avg_gpa") is not None else 0.0,
+                "avg_internal": float(r["avg_internal"]) if r.get("avg_internal") is not None else 0.0,
+                "avg_attendance": float(r["avg_attendance"]) if r.get("avg_attendance") is not None else 0.0,
+                "avg_risk_score": float(r["avg_risk_score"]) if r.get("avg_risk_score") is not None else 0.0
+            }
+            for r in sem_trends_raw
+        ]
 
         # 8. Top Risk Factor Drivers across all high/medium risk students
         factor_counts = {

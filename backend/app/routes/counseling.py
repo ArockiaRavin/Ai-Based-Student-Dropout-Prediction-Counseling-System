@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional, List
+from fastapi import APIRouter, HTTPException, Query, Depends
+from typing import Optional, List, Dict, Any
 from app.database import get_db
 from app.models import CounselingSessionCreate, CounselingSessionResponse
+from app.auth_utils import require_role, log_audit
 
 router = APIRouter(prefix="/counseling", tags=["counseling"])
 
@@ -55,7 +56,10 @@ def list_counseling_sessions(
         return {"sessions": results, "total": len(results)}
 
 @router.post("/sessions")
-def create_counseling_session(payload: CounselingSessionCreate):
+def create_counseling_session(
+    payload: CounselingSessionCreate,
+    current_user: Dict[str, Any] = Depends(require_role(["Administrator", "Counselor"]))
+):
     with get_db() as conn:
         cursor = conn.cursor()
         student = cursor.execute("SELECT first_name, last_name FROM students WHERE student_id = ?;", (payload.student_id,)).fetchone()
@@ -68,16 +72,14 @@ def create_counseling_session(payload: CounselingSessionCreate):
                 notes, action_plan, follow_up_date, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
         """, (
-            payload.student_id, payload.counselor_name, payload.session_date,
+            payload.student_id, payload.counselor_name or current_user.get("name", "Counselor"), payload.session_date,
             payload.support_category, payload.notes, payload.action_plan,
             payload.follow_up_date, payload.status
         ))
         session_id = cursor.lastrowid
 
-        cursor.execute("""
-            INSERT INTO audit_logs (user_name, action, entity_type, entity_id, details)
-            VALUES (?, ?, ?, ?, ?);
-        """, (payload.counselor_name, "RECORD_COUNSELING", "CounselingSession", str(session_id), f"Recorded session for {student['first_name']} {student['last_name']} under {payload.support_category}"))
+        user_name = current_user.get("name", payload.counselor_name)
+        log_audit(conn, user_name, "RECORD_COUNSELING", "CounselingSession", str(session_id), f"Recorded session for {student['first_name']} {student['last_name']} under {payload.support_category}")
 
         return {
             "message": "Counseling session recorded successfully",
@@ -85,7 +87,11 @@ def create_counseling_session(payload: CounselingSessionCreate):
         }
 
 @router.put("/sessions/{session_id}")
-def update_counseling_session(session_id: int, payload: dict):
+def update_counseling_session(
+    session_id: int,
+    payload: dict,
+    current_user: Dict[str, Any] = Depends(require_role(["Administrator", "Counselor"]))
+):
     with get_db() as conn:
         cursor = conn.cursor()
         session = cursor.execute("SELECT * FROM counseling_sessions WHERE id = ?;", (session_id,)).fetchone()

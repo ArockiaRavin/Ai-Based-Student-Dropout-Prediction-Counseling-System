@@ -34,6 +34,7 @@ export const RiskAnalysisPage: React.FC = () => {
   const [semester, setSemester] = useState<string>('All');
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRiskAnalysis();
@@ -42,13 +43,15 @@ export const RiskAnalysisPage: React.FC = () => {
   const fetchRiskAnalysis = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await api.getRiskAnalysis(
         department !== 'All' ? department : undefined,
         semester !== 'All' ? parseInt(semester) : undefined
       );
       setData(res);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err.message || 'Failed to load risk analysis data');
     } finally {
       setLoading(false);
     }
@@ -114,8 +117,18 @@ export const RiskAnalysisPage: React.FC = () => {
           <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin" />
           <p className="text-xs text-slate-400">Computing cross-sectional risk distributions...</p>
         </div>
-      ) : !data ? (
-        <div className="p-8 text-center text-xs text-slate-500">Failed to load risk analysis data.</div>
+      ) : !data || error ? (
+        <div className="p-8 text-center space-y-3">
+          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
+          <p className="text-xs text-slate-400">{error || 'Failed to load risk analysis data.'}</p>
+          <button
+            onClick={fetchRiskAnalysis}
+            className="px-4 py-2 bg-indigo-600/50 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Analysis</span>
+          </button>
+        </div>
       ) : (
         <>
           {/* Scientific Caution Alert */}

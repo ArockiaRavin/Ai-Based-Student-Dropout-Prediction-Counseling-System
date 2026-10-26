@@ -13,18 +13,29 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+  const token = localStorage.getItem('eduretain_token');
+  
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string> || {}),
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
     const res = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
       ...options,
+      headers,
     });
 
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.detail || `Request failed with status ${res.status}`);
+      const error = new Error(errorData.detail || `Request failed with status ${res.status}`);
+      (error as any).status = res.status;
+      (error as any).statusText = res.statusText;
+      throw error;
     }
 
     return await res.json();
@@ -43,6 +54,108 @@ export const api = {
     request<{ token: string; user: User }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
+    }),
+
+  register: (data: { name: string; email: string; password: string; role: string; department?: string }) =>
+    request<{ message: string; status: string; token?: string; verification_token?: string; user: User }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getMe: () => request<{ user: User }>('/auth/me'),
+
+  getSetupAdminStatus: () =>
+    request<{ setup_available: boolean; message: string }>('/auth/setup-admin/status'),
+
+  setupInitialAdmin: (data: {
+    setup_key: string;
+    name: string;
+    email: string;
+    password: string;
+    department?: string;
+    username?: string;
+  }) =>
+    request<{ message: string; token: string; user: User }>('/auth/setup-admin', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  forgotPassword: (email: string) =>
+    request<{ message: string; reset_token?: string; expires_in?: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (reset_token: string, new_password: string) =>
+    request<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ reset_token, new_password }),
+    }),
+
+  verifyEmail: (token: string) =>
+    request<{ message: string }>('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+
+  resendVerification: (email: string) =>
+    request<{ message: string; verification_token?: string }>('/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  logout: () =>
+    request<{ message: string }>('/auth/logout', {
+      method: 'POST',
+    }),
+
+  updateProfile: (data: { name?: string; department?: string; current_password?: string; new_password?: string }) =>
+    request<{ message: string; user: User }>('/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // User Management (Admin Only)
+  getUsers: () => request<{ users: User[]; total: number }>('/users'),
+
+  getUserDetails: (userId: number) => request<{ user: User }>(`/users/${userId}`),
+
+  createUser: (data: {
+    username?: string;
+    name: string;
+    email: string;
+    password: string;
+    role: string;
+    department?: string;
+    status?: string;
+    admin_password?: string;
+  }) =>
+    request<{ message: string; user_id: number }>('/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateUserDetails: (userId: number, data: { name?: string; department?: string; status?: string }) =>
+    request<{ message: string; user: User }>(`/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  updateUserStatus: (userId: number, status: 'active' | 'pending' | 'deactivated') =>
+    request<{ message: string; status: string }>(`/users/${userId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    }),
+
+  updateUserRole: (userId: number, role: 'Administrator' | 'Counselor' | 'Viewer', admin_password?: string) =>
+    request<{ message: string; role: string }>(`/users/${userId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role, admin_password }),
+    }),
+
+  deleteUser: (userId: number) =>
+    request<{ message: string }>(`/users/${userId}`, {
+      method: 'DELETE',
     }),
 
   getNotifications: () =>

@@ -1,12 +1,13 @@
 import json
 import csv
 import io
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Depends
 from fastapi.responses import StreamingResponse
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from app.database import get_db
 from app.models import StudentCreate, StudentUpdate, StudentResponse
 from app.ml.pipeline import ml_system
+from app.auth_utils import get_optional_user, require_role, log_audit
 
 router = APIRouter(prefix="/students", tags=["students"])
 
@@ -17,7 +18,8 @@ def list_students(
     semester: Optional[int] = Query(None),
     risk_level: Optional[str] = Query(None),
     sort_by: Optional[str] = Query("id"),
-    sort_order: Optional[str] = Query("asc")
+    sort_order: Optional[str] = Query("asc"),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     with get_db() as conn:
         cursor = conn.cursor()
@@ -73,6 +75,7 @@ def list_students(
 
         rows = cursor.execute(query, params).fetchall()
 
+        is_viewer = current_user and current_user.get("role") == "Viewer"
         results = []
         for r in rows:
             latest_pred = None
@@ -86,12 +89,19 @@ def list_students(
                     "recommendations": json.loads(r["recommendations_json"]) if r["recommendations_json"] else [],
                     "created_at": r["pred_created_at"]
                 }
+
+            # Privacy protection for Viewer role: mask email
+            display_email = r["email"]
+            if is_viewer and "@" in display_email:
+                local_part, domain = display_email.split("@", 1)
+                display_email = f"{local_part[:2]}***@{domain}"
+
             results.append({
                 "id": r["id"],
                 "student_id": r["student_id"],
                 "first_name": r["first_name"],
                 "last_name": r["last_name"],
-                "email": r["email"],
+                "email": display_email,
                 "department": r["department"],
                 "semester": r["semester"],
                 "attendance_pct": r["attendance_pct"],
@@ -203,7 +213,10 @@ def get_student(student_id: str):
         }
 
 @router.post("")
-def create_student(payload: StudentCreate):
+def create_student(
+    payload: StudentCreate,
+    current_user: Dict[str, Any] = Depends(require_role(["Administrator", "Counselor"]))
+):
     with get_db() as conn:
         cursor = conn.cursor()
         # Check duplicate
@@ -249,10 +262,8 @@ def create_student(payload: StudentCreate):
             ))
 
         # Audit log
-        cursor.execute("""
-            INSERT INTO audit_logs (user_name, action, entity_type, entity_id, details)
-            VALUES (?, ?, ?, ?, ?);
-        """, ("System User", "CREATE_STUDENT", "Student", payload.student_id, f"Added student {payload.first_name} {payload.last_name} ({payload.department})"))
+        user_name = current_user.get("name", "User")
+        log_audit(conn, user_name, "CREATE_STUDENT", "Student", payload.student_id, f"Added student {payload.first_name} {payload.last_name} ({payload.department})")
 
         return {
             "message": "Student created successfully",
@@ -261,7 +272,11 @@ def create_student(payload: StudentCreate):
         }
 
 @router.put("/{student_id}")
-def update_student(student_id: str, payload: StudentUpdate):
+def update_student(
+    student_id: str,
+    payload: StudentUpdate,
+    current_user: Dict[str, Any] = Depends(require_role(["Administrator", "Counselor"]))
+):
     with get_db() as conn:
         cursor = conn.cursor()
         student = cursor.execute("SELECT * FROM students WHERE student_id = ?;", (student_id,)).fetchone()
@@ -296,10 +311,8 @@ def update_student(student_id: str, payload: StudentUpdate):
             json.dumps(pred["factors"]), json.dumps(pred["positive_indicators"]), json.dumps(pred["recommendations"])
         ))
 
-        cursor.execute("""
-            INSERT INTO audit_logs (user_name, action, entity_type, entity_id, details)
-            VALUES (?, ?, ?, ?, ?);
-        """, ("System User", "UPDATE_STUDENT", "Student", student_id, f"Updated fields: {list(updates.keys())}"))
+        user_name = current_user.get("name", "User")
+        log_audit(conn, user_name, "UPDATE_STUDENT", "Student", student_id, f"Updated fields: {list(updates.keys())}")
 
         return {
             "message": "Student updated successfully",
@@ -308,7 +321,10 @@ def update_student(student_id: str, payload: StudentUpdate):
         }
 
 @router.delete("/{student_id}")
-def delete_student(student_id: str):
+def delete_student(
+    student_id: str,
+    current_user: Dict[str, Any] = Depends(require_role(["Administrator"]))
+):
     with get_db() as conn:
         cursor = conn.cursor()
         student = cursor.execute("SELECT * FROM students WHERE student_id = ?;", (student_id,)).fetchone()
@@ -316,15 +332,16 @@ def delete_student(student_id: str):
             raise HTTPException(status_code=404, detail="Student not found")
 
         cursor.execute("DELETE FROM students WHERE student_id = ?;", (student_id,))
-        cursor.execute("""
-            INSERT INTO audit_logs (user_name, action, entity_type, entity_id, details)
-            VALUES (?, ?, ?, ?, ?);
-        """, ("System User", "DELETE_STUDENT", "Student", student_id, f"Deleted student record for {student['first_name']} {student['last_name']}"))
+        user_name = current_user.get("name", "Admin")
+        log_audit(conn, user_name, "DELETE_STUDENT", "Student", student_id, f"Deleted student record for {student['first_name']} {student['last_name']}")
 
         return {"message": f"Student {student_id} deleted successfully"}
 
 @router.post("/import")
-async def import_students_csv(file: UploadFile = File(...)):
+async def import_students_csv(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(require_role(["Administrator"]))
+):
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 

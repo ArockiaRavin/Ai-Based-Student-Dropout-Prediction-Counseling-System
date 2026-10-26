@@ -39,11 +39,16 @@ import { api } from '../api';
 import { DashboardSummary } from '../types';
 import { KPICard } from '../components/KPICard';
 import { RiskBadge } from '../components/RiskBadge';
+import { useAuth } from '../context/AuthContext';
+import { UserManagementModal } from '../components/UserManagementModal';
+import { Shield, Eye, Lock, CheckCircle2, UserCheck } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
+  const { user, role, isAdmin, isCounselor, isViewer } = useAuth();
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showUserModal, setShowUserModal] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -85,9 +90,20 @@ export const DashboardPage: React.FC = () => {
         <p className="text-sm text-slate-400">{error || 'Could not fetch dashboard summary'}</p>
         <button
           onClick={loadDashboard}
-          className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl text-xs font-bold hover:from-indigo-500 hover:to-indigo-600 transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)]"
+          disabled={loading}
+          className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl text-xs font-bold hover:from-indigo-500 hover:to-indigo-600 transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)] inline-flex items-center gap-2 mx-auto disabled:opacity-50"
         >
-          Retry Connection
+          {loading ? (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-300" />
+              <span>Reconnecting...</span>
+            </>
+          ) : (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 text-cyan-300" />
+              <span>Retry Connection</span>
+            </>
+          )}
         </button>
       </div>
     );
@@ -127,6 +143,106 @@ export const DashboardPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Role-Specific Mission & Clearance Banner */}
+      {isAdmin && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-950/60 via-indigo-900/30 to-purple-950/40 border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0_4px_25px_rgba(99,102,241,0.15)] animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shrink-0 mt-0.5">
+              <Shield className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-white text-sm">Administrator Control Workspace</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-500/40 font-mono">
+                  FULL PRIVILEGES
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                Authorized administrator: {user?.name}. You have access to user management, counselor approvals, model insights, and audit records.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+            <button
+              onClick={() => setShowUserModal(true)}
+              className="px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-600 shadow-[0_0_15px_rgba(99,102,241,0.3)] transition-all flex items-center gap-1.5"
+            >
+              <UserCheck className="w-4 h-4 text-cyan-300" />
+              <span>Manage User Roles &amp; Accounts</span>
+            </button>
+            <button
+              onClick={() => navigate('/settings')}
+              className="px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition-colors"
+            >
+              Settings &amp; Audit
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isCounselor && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/60 via-teal-900/30 to-indigo-950/40 border border-cyan-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0_4px_25px_rgba(34,211,238,0.15)] animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shrink-0 mt-0.5">
+              <HeartHandshake className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-white text-sm">Counselor Intervention Workspace</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 font-mono">
+                  COUNSELOR SCOPE
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                Counselor: {user?.name}. Manage high-risk cases, record student counseling sessions, and coordinate intervention outcomes.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+            <button
+              onClick={() => navigate('/counselor-center')}
+              className="px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 shadow-[0_0_15px_rgba(34,211,238,0.3)] transition-all flex items-center gap-1.5"
+            >
+              <HeartHandshake className="w-4 h-4" />
+              <span>Counselor Center</span>
+            </button>
+            <button
+              onClick={() => navigate('/interventions')}
+              className="px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 transition-colors"
+            >
+              Interventions Queue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isViewer && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/60 via-indigo-950/30 to-slate-900/50 border border-purple-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0_4px_25px_rgba(168,85,247,0.15)] animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 shrink-0 mt-0.5">
+              <Eye className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-white text-sm">Academic Faculty &amp; Viewer Portal</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-200 border border-purple-500/40 font-mono">
+                  READ-ONLY ACCESS
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                Viewer: {user?.name}. You have permitted access to academic retention distributions, risk statistics, and department analytics. Student contact information is masked for student privacy.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+            <span className="text-[11px] font-medium text-purple-300 bg-purple-500/10 px-3 py-1.5 rounded-xl border border-purple-500/20 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-purple-400" />
+              Write Operations Restricted
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -535,6 +651,14 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Admin User Management Modal */}
+      {isAdmin && (
+        <UserManagementModal
+          isOpen={showUserModal}
+          onClose={() => setShowUserModal(false)}
+        />
+      )}
     </div>
   );
 };

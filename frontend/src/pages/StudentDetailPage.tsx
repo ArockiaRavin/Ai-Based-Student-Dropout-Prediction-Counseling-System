@@ -32,6 +32,7 @@ export const StudentDetailPage: React.FC = () => {
   const [sessions, setSessions] = useState<CounselingSession[]>([]);
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // New Counseling Session Dialog
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
@@ -54,14 +55,16 @@ export const StudentDetailPage: React.FC = () => {
   const loadStudentProfile = async (id: string) => {
     try {
       setLoading(true);
+      setError(null);
       const res = await api.getStudent(id);
       setStudent(res.student);
       setLatestPred(res.latest_prediction || null);
       setPredHistory(res.predictions_history || []);
       setSessions(res.counseling_sessions || []);
       setInterventions(res.interventions || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err.message || 'Failed to load student profile');
     } finally {
       setLoading(false);
     }
@@ -95,10 +98,24 @@ export const StudentDetailPage: React.FC = () => {
     return (
       <div className="p-8 text-center space-y-4">
         <AlertCircle className="w-12 h-12 text-[#FB7185] mx-auto" />
-        <h3 className="text-lg font-bold text-white">Student Profile Not Found</h3>
-        <Link to="/students" className="text-cyan-400 text-sm font-semibold hover:underline">
-          &larr; Back to Student Cohort
-        </Link>
+        <h3 className="text-lg font-bold text-white">
+          {error ? 'Unable to Load Student Dossier' : 'Student Profile Not Found'}
+        </h3>
+        {error && <p className="text-xs text-slate-400 max-w-md mx-auto">{error}</p>}
+        <div className="flex items-center justify-center gap-3">
+          {studentId && (
+            <button
+              onClick={() => loadStudentProfile(studentId)}
+              className="px-4 py-2 bg-indigo-600/50 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Retry Connection</span>
+            </button>
+          )}
+          <Link to="/students" className="text-cyan-400 text-sm font-semibold hover:underline">
+            &larr; Back to Student Cohort
+          </Link>
+        </div>
       </div>
     );
   }

@@ -40,6 +40,8 @@ export const CounselorCenterPage: React.FC = () => {
     status: 'Completed'
   });
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     loadCounselorHub();
     api.getStudents().then(res => setStudents(res.students || [])).catch(() => {});
@@ -48,6 +50,7 @@ export const CounselorCenterPage: React.FC = () => {
   const loadCounselorHub = async () => {
     try {
       setLoading(true);
+      setError(null);
       const [sessionsRes, overviewRes] = await Promise.all([
         api.getCounselingSessions(),
         api.getCounselorOverview()
@@ -55,8 +58,9 @@ export const CounselorCenterPage: React.FC = () => {
       setSessions(sessionsRes.sessions || []);
       setPriorityCases(overviewRes.priority_cases || []);
       setUpcomingFollowups(overviewRes.upcoming_followups || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError(err.message || 'Failed to load counselor center records');
     } finally {
       setLoading(false);
     }
@@ -118,6 +122,18 @@ export const CounselorCenterPage: React.FC = () => {
         <div className="py-20 flex flex-col items-center justify-center space-y-3">
           <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin" />
           <p className="text-xs text-slate-400">Loading counselor center records...</p>
+        </div>
+      ) : error ? (
+        <div className="p-8 text-center space-y-3">
+          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
+          <p className="text-xs text-slate-400">{error}</p>
+          <button
+            onClick={loadCounselorHub}
+            className="px-4 py-2 bg-indigo-600/50 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Connection</span>
+          </button>
         </div>
       ) : (
         <>

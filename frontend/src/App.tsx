@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 // Pages
 import { LandingPage } from './pages/LandingPage';
@@ -17,21 +18,51 @@ import { ReportsPage } from './pages/ReportsPage';
 import { ModelInsightsPage } from './pages/ModelInsightsPage';
 import { PresentationModePage } from './pages/PresentationModePage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { ManageUsersPage } from './pages/ManageUsersPage';
+
+// Authentication Pages
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
+import { AccessDeniedPage } from './pages/AccessDeniedPage';
+import { SetupAdminPage } from './pages/SetupAdminPage';
 
 const AppLayout: React.FC = () => {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Standalone pages that don't need the dashboard sidebar/navbar
-  const isLanding = location.pathname === '/';
-  const isPresentation = location.pathname === '/presentation';
+  // Standalone pages without dashboard sidebar/navbar
+  const standalonePaths = [
+    '/',
+    '/presentation',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/reset-password',
+    '/verify-email',
+    '/access-denied',
+    '/setup-admin'
+  ];
 
-  if (isLanding) {
-    return <LandingPage />;
-  }
+  const isStandalone = standalonePaths.includes(location.pathname);
 
-  if (isPresentation) {
-    return <PresentationModePage />;
+  if (isStandalone) {
+    return (
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/presentation" element={<PresentationModePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/access-denied" element={<AccessDeniedPage />} />
+        <Route path="/setup-admin" element={<SetupAdminPage />} />
+      </Routes>
+    );
   }
 
   return (
@@ -46,16 +77,112 @@ const AppLayout: React.FC = () => {
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <main className="flex-1 overflow-y-auto bg-[#070B18]/70">
           <Routes>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/students" element={<StudentsPage />} />
-            <Route path="/students/:studentId" element={<StudentDetailPage />} />
-            <Route path="/predictions" element={<PredictionPage />} />
-            <Route path="/risk-analysis" element={<RiskAnalysisPage />} />
-            <Route path="/counselor-center" element={<CounselorCenterPage />} />
-            <Route path="/interventions" element={<InterventionTrackingPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/model-insights" element={<ModelInsightsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/students"
+              element={
+                <ProtectedRoute>
+                  <StudentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/students/:studentId"
+              element={
+                <ProtectedRoute>
+                  <StudentDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/predictions"
+              element={
+                <ProtectedRoute>
+                  <PredictionPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/risk-analysis"
+              element={
+                <ProtectedRoute>
+                  <RiskAnalysisPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/counselor-center"
+              element={
+                <ProtectedRoute allowedRoles={['Administrator', 'Counselor']}>
+                  <CounselorCenterPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/interventions"
+              element={
+                <ProtectedRoute allowedRoles={['Administrator', 'Counselor']}>
+                  <InterventionTrackingPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <ProtectedRoute>
+                  <ReportsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/model-insights"
+              element={
+                <ProtectedRoute>
+                  <ModelInsightsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <ProfilePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/manage-users"
+              element={
+                <ProtectedRoute allowedRoles={['Administrator']}>
+                  <ManageUsersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <ProtectedRoute allowedRoles={['Administrator']}>
+                  <ManageUsersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute allowedRoles={['Administrator']}>
+                  <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* Catch-all redirect to public landing */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
       </div>

@@ -113,6 +113,60 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
+class UserRegister(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str = "Counselor"
+    department: str = "Student Welfare"
+
+class UserCreateAdmin(BaseModel):
+    username: Optional[str] = None
+    name: str
+    email: str
+    password: str
+    role: str = "Counselor"
+    department: str = "Student Welfare"
+    status: str = "active"
+    admin_password: Optional[str] = None
+
+class UserEditAdmin(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    department: Optional[str] = None
+    status: Optional[str] = None
+
+class UserProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    department: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    reset_token: str
+    new_password: str
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+class SetupAdminRequest(BaseModel):
+    setup_key: str
+    name: str
+    email: str
+    password: str
+    department: str = "Administration"
+    username: Optional[str] = None
+
+class UserStatusUpdate(BaseModel):
+    status: str  # 'active', 'pending', 'deactivated'
+
+class UserRoleUpdate(BaseModel):
+    role: str  # 'Administrator', 'Counselor', 'Viewer'
+    admin_password: Optional[str] = None
+
 class UserResponse(BaseModel):
     id: int
     username: str
@@ -120,3 +174,8 @@ class UserResponse(BaseModel):
     email: str
     role: str
     department: str
+    status: Optional[str] = "active"
+    email_verified: Optional[int] = 1
+    created_at: Optional[str] = None
+    last_login: Optional[str] = None
+
