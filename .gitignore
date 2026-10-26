@@ -23,6 +23,21 @@ Thumbs.db
 .env
 .env.*
 *.env
+*.env.local
 backend/.admin_setup_key
 !*.env.example
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+backend/*.db
+
+# Keys and certificates
+*.key
+*.pem
+
+# Supabase temporary files
+supabase/.temp/
+
 

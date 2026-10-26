@@ -9,9 +9,17 @@ from typing import Optional, Dict, Any, List
 from fastapi import Header, HTTPException, status, Depends
 from app.database import get_db
 
-SECRET_KEY = os.environ.get("JWT_SECRET", "eduretain-super-secure-production-ready-jwt-secret-key-2025")
+_configured_secret = os.environ.get("JWT_SECRET") or os.environ.get("SECRET_KEY")
+if not _configured_secret:
+    if os.environ.get("ENVIRONMENT") == "production":
+        raise ValueError("CRITICAL: JWT_SECRET or SECRET_KEY must be configured in production environment variables.")
+    SECRET_KEY = secrets.token_hex(32)
+else:
+    SECRET_KEY = _configured_secret
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
+
 
 def hash_password(password: str) -> str:
     """Generate salted PBKDF2-HMAC-SHA256 password hash."""

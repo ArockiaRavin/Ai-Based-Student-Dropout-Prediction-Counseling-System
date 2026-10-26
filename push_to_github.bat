@@ -28,7 +28,7 @@ echo.
 echo [3/3] Pushing project files to GitHub...
 cd /d "%~dp0"
 "%GIT_EXE%" remote set-url origin https://github.com/ArockiaRavin/Ai-Based-Student-Dropout-Prediction-Counseling-System.git
-"%GIT_EXE%" push -u origin main --force
+"%GIT_EXE%" push -u origin main
 
 if %ERRORLEVEL% equ 0 (
     echo.

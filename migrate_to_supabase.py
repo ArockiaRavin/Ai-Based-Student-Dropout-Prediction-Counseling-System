@@ -4,11 +4,25 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import json
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:Ravin1610200@db.whwgrleerwhbizvcfjtr.supabase.co:5432/postgres"
-)
+try:
+    from dotenv import load_dotenv
+    for p in [
+        os.path.join(os.path.dirname(__file__), "backend", ".env"),
+        os.path.join(os.path.dirname(__file__), ".env")
+    ]:
+        if os.path.exists(p):
+            load_dotenv(p)
+except ImportError:
+    pass
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable is missing. "
+        "Please provide DATABASE_URL in your backend/.env file before running migration."
+    )
 SQLITE_DB_PATH = os.path.join(os.path.dirname(__file__), "backend", "student_retention.db")
+
 
 SCHEMA_SQL = """
 -- 1. Users table
