@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 from app.database import get_db
 from app.models import InterventionCreate, InterventionUpdate, InterventionResponse
 from app.auth_utils import require_role, log_audit
+from app.routes.analytics import invalidate_analytics_cache
 
 router = APIRouter(prefix="/interventions", tags=["interventions"])
 
@@ -108,6 +109,8 @@ def create_intervention(
         user_name = current_user.get("name", payload.assigned_to)
         log_audit(conn, user_name, "CREATE_INTERVENTION", "Intervention", str(int_id), f"Created intervention '{payload.title}' for {student['first_name']} {student['last_name']}")
 
+        invalidate_analytics_cache()
+
         return {
             "message": "Intervention created successfully",
             "id": int_id
@@ -137,5 +140,6 @@ def update_intervention(
 
             user_name = current_user.get("name", "User")
             log_audit(conn, user_name, "UPDATE_INTERVENTION", "Intervention", str(intervention_id), f"Updated intervention #{intervention_id} status to {updates.get('status', item['status'])}")
+            invalidate_analytics_cache()
 
         return {"message": "Intervention updated successfully"}

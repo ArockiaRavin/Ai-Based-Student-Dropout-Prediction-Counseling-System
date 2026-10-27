@@ -45,26 +45,35 @@ import { Shield, Eye, Lock, CheckCircle2, UserCheck } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { user, role, isAdmin, isCounselor, isViewer } = useAuth();
-  const [data, setData] = useState<DashboardSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedSummary = api.getCached<DashboardSummary>('/analytics/dashboard-summary');
+  const [data, setData] = useState<DashboardSummary | null>(cachedSummary);
+  const [loading, setLoading] = useState(!cachedSummary);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadDashboard();
+    loadDashboard(Boolean(cachedSummary));
   }, []);
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       setError(null);
-      const summary = await api.getDashboardSummary();
+      const summary = await api.getDashboardSummary(!silent);
       setData(summary);
     } catch (err: any) {
-      setError(err.message || 'Failed to load dashboard data');
+      if (!data) {
+        setError(err.message || 'Failed to load dashboard data');
+      }
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -89,7 +98,7 @@ export const DashboardPage: React.FC = () => {
         <h3 className="text-lg font-bold text-white">Dashboard Telemetry Unavailable</h3>
         <p className="text-sm text-slate-400">{error || 'Could not fetch dashboard summary'}</p>
         <button
-          onClick={loadDashboard}
+          onClick={() => loadDashboard(false)}
           disabled={loading}
           className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-xl text-xs font-bold hover:from-indigo-500 hover:to-indigo-600 transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)] inline-flex items-center gap-2 mx-auto disabled:opacity-50"
         >
@@ -134,12 +143,13 @@ export const DashboardPage: React.FC = () => {
             Cohort Active: N={kpis.total_students}
           </span>
           <button
-            onClick={loadDashboard}
-            className="p-2.5 rounded-xl bg-white/[0.05] border border-white/10 hover:bg-white/[0.1] text-slate-200 text-xs flex items-center gap-2 transition-all shadow-md"
+            onClick={() => loadDashboard(false)}
+            disabled={loading || isRefreshing}
+            className="p-2.5 rounded-xl bg-white/[0.05] border border-white/10 hover:bg-white/[0.1] text-slate-200 text-xs flex items-center gap-2 transition-all shadow-md disabled:opacity-50"
             title="Refresh Data"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline font-semibold">Refresh</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline font-semibold">{isRefreshing ? 'Updating...' : 'Refresh'}</span>
           </button>
         </div>
       </div>

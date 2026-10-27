@@ -1,12 +1,29 @@
 import json
+import time
 from fastapi import APIRouter, Query
-from typing import Optional
+from typing import Optional, Dict, Any, Tuple
 from app.database import get_db
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
+_dashboard_cache: Optional[Dict[str, Any]] = None
+_dashboard_cache_time: float = 0.0
+_risk_cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
+_CACHE_TTL = 30.0  # 30-second TTL
+
+def invalidate_analytics_cache():
+    global _dashboard_cache, _dashboard_cache_time, _risk_cache
+    _dashboard_cache = None
+    _dashboard_cache_time = 0.0
+    _risk_cache.clear()
+
 @router.get("/dashboard-summary")
 def get_dashboard_summary():
+    global _dashboard_cache, _dashboard_cache_time
+    now = time.time()
+    if _dashboard_cache is not None and (now - _dashboard_cache_time) < _CACHE_TTL:
+        return _dashboard_cache
+
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -176,7 +193,7 @@ def get_dashboard_summary():
             LIMIT 8;
         """).fetchall()
 
-        return {
+        result = {
             "kpis": {
                 "total_students": total_students,
                 "high_risk": high_risk_count,
@@ -197,12 +214,22 @@ def get_dashboard_summary():
             "priority_attention": priority_attention,
             "recent_activity": recent_activity
         }
+        _dashboard_cache = result
+        _dashboard_cache_time = now
+        return result
 
 @router.get("/risk-analysis")
 def get_risk_analysis(
     department: Optional[str] = Query(None),
     semester: Optional[int] = Query(None)
 ):
+    global _risk_cache
+    cache_key = f"{department}:{semester}"
+    now = time.time()
+    if cache_key in _risk_cache:
+        cached_data, cached_time = _risk_cache[cache_key]
+        if (now - cached_time) < _CACHE_TTL:
+            return cached_data
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -254,9 +281,11 @@ def get_risk_analysis(
             else:
                 gpa_brackets[">= 8.0"] += 1
 
-        return {
+        result = {
             "total_analyzed": len(students),
             "attendance_brackets": [{"bracket": k, "students": v} for k, v in att_brackets.items()],
             "gpa_brackets": [{"bracket": k, "students": v} for k, v in gpa_brackets.items()],
             "students": students[:20]  # Top at-risk students for preview table
         }
+        _risk_cache[cache_key] = (result, now)
+        return result

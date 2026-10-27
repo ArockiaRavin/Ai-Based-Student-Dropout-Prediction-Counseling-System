@@ -44,11 +44,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Load real authenticated user from local storage; NEVER substitute a hardcoded default name
   const [user, setUser] = useState<User | null>(() => {
     const savedUser = localStorage.getItem('eduretain_user');
-    if (savedUser) {
+    if (savedUser && savedUser.trim() && savedUser !== 'undefined' && savedUser !== 'null') {
       try {
         return JSON.parse(savedUser);
       } catch (e) {
-        console.error('Failed to parse saved user:', e);
+        console.error('Failed to parse saved user from storage:', e);
+        try {
+          localStorage.removeItem('eduretain_user');
+        } catch {
+          // Ignore storage access errors
+        }
       }
     }
     return null;

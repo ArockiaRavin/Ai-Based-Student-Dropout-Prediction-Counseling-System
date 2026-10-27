@@ -140,7 +140,15 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, A
         )
 
     user_id = payload.get("user_id")
-    identifier = payload.get("sub") or payload.get("username")
+    raw_identifier = payload.get("sub") or payload.get("username")
+    if user_id is None and isinstance(raw_identifier, int):
+        user_id = raw_identifier
+        identifier = None
+    elif raw_identifier is not None:
+        identifier = str(raw_identifier)
+    else:
+        identifier = None
+
     if not identifier and not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

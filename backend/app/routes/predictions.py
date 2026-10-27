@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import PredictionRequest, PredictionResponse
 from app.ml.pipeline import ml_system
 from app.auth_utils import get_optional_user, log_audit
+from app.routes.analytics import invalidate_analytics_cache
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
@@ -109,6 +110,8 @@ def run_prediction(
                 INSERT INTO audit_logs (user_name, action, entity_type, entity_id, details)
                 VALUES (?, ?, ?, ?, ?);
             """, ("System User", "RUN_PREDICTION", "Prediction", student_id, f"Risk: {pred_result['risk_category']} ({pred_result['risk_score']}%) via {pred_result['model_used']}"))
+
+            invalidate_analytics_cache()
 
     return {
         "student_id": student_id,

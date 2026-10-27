@@ -27,16 +27,16 @@ import { User } from '../types';
 export const ProfilePage: React.FC = () => {
   const { user: authUser, updateProfile, refreshProfile } = useAuth();
   
-  // Local profile state
-  const [profile, setProfile] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Local profile state initialized immediately from authUser
+  const [profile, setProfile] = useState<User | null>(authUser || null);
+  const [loading, setLoading] = useState<boolean>(!authUser);
   const [saving, setSaving] = useState<boolean>(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Form fields
-  const [name, setName] = useState<string>('');
-  const [department, setDepartment] = useState<string>('');
+  const [name, setName] = useState<string>(authUser?.name || '');
+  const [department, setDepartment] = useState<string>(authUser?.department || '');
   
   // Password change fields
   const [showPasswordChange, setShowPasswordChange] = useState<boolean>(false);
@@ -45,8 +45,10 @@ export const ProfilePage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState<string>('');
 
   // Fetch real authenticated profile from database using authenticated user session
-  const loadProfile = async () => {
-    setLoading(true);
+  const loadProfile = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     setFetchError(null);
     try {
       const res = await api.getMe();
@@ -54,7 +56,7 @@ export const ProfilePage: React.FC = () => {
         setProfile(res.user);
         setName(res.user.name || '');
         setDepartment(res.user.department || '');
-      } else {
+      } else if (!profile) {
         setFetchError('User profile details could not be retrieved from the database.');
       }
     } catch (err: any) {
@@ -64,7 +66,7 @@ export const ProfilePage: React.FC = () => {
         setProfile(authUser);
         setName(authUser.name || '');
         setDepartment(authUser.department || '');
-      } else {
+      } else if (!profile) {
         setFetchError(err.message || 'Unable to connect to the authentication service.');
       }
     } finally {
@@ -73,7 +75,8 @@ export const ProfilePage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadProfile();
+    // If authUser is already present, validate in background silently
+    loadProfile(Boolean(authUser));
   }, []);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -158,7 +161,7 @@ export const ProfilePage: React.FC = () => {
           <p className="text-xs text-slate-400 leading-relaxed">{fetchError}</p>
         </div>
         <button
-          onClick={loadProfile}
+          onClick={() => loadProfile(false)}
           className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-600 text-white text-xs font-semibold shadow-lg transition-all"
         >
           Retry Fetching Profile
@@ -217,7 +220,7 @@ export const ProfilePage: React.FC = () => {
           </span>
           <button
             type="button"
-            onClick={loadProfile}
+            onClick={() => loadProfile(false)}
             title="Refresh profile from database"
             className="p-2 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] text-slate-300 hover:text-white transition-colors"
           >
@@ -537,7 +540,7 @@ export const ProfilePage: React.FC = () => {
             <div className="pt-4 border-t border-white/10 flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={loadProfile}
+                onClick={() => loadProfile(false)}
                 disabled={saving}
                 className="px-4 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-slate-300 text-xs font-semibold transition-colors"
               >

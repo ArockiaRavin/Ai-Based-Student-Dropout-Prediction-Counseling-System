@@ -32,30 +32,41 @@ import { RiskBadge } from '../components/RiskBadge';
 export const RiskAnalysisPage: React.FC = () => {
   const [department, setDepartment] = useState('All');
   const [semester, setSemester] = useState<string>('All');
-  const [data, setData] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedData = api.getCached<any>('/analytics/risk-analysis?');
+  const [data, setData] = useState<any | null>(cachedData);
+  const [loading, setLoading] = useState(!cachedData);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchRiskAnalysis();
-  }, [department, semester]);
-
-  const fetchRiskAnalysis = async () => {
+  const fetchRiskAnalysis = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent || !data) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       setError(null);
       const res = await api.getRiskAnalysis(
         department !== 'All' ? department : undefined,
-        semester !== 'All' ? parseInt(semester) : undefined
+        semester !== 'All' ? parseInt(semester) : undefined,
+        !silent
       );
       setData(res);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to load risk analysis data');
+      if (!data) {
+        setError(err.message || 'Failed to load risk analysis data');
+      }
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    const isDefault = department === 'All' && semester === 'All';
+    fetchRiskAnalysis(isDefault && Boolean(cachedData));
+  }, [department, semester]);
 
   const departmentsList = [
     'All',
@@ -122,7 +133,7 @@ export const RiskAnalysisPage: React.FC = () => {
           <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
           <p className="text-xs text-slate-400">{error || 'Failed to load risk analysis data.'}</p>
           <button
-            onClick={fetchRiskAnalysis}
+            onClick={() => fetchRiskAnalysis(false)}
             className="px-4 py-2 bg-indigo-600/50 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2"
           >
             <RefreshCw className="w-3.5 h-3.5" />

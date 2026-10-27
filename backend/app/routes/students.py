@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models import StudentCreate, StudentUpdate, StudentResponse
 from app.ml.pipeline import ml_system
 from app.auth_utils import get_optional_user, require_role, log_audit
+from app.routes.analytics import invalidate_analytics_cache
 
 router = APIRouter(prefix="/students", tags=["students"])
 
@@ -265,6 +266,8 @@ def create_student(
         user_name = current_user.get("name", "User")
         log_audit(conn, user_name, "CREATE_STUDENT", "Student", payload.student_id, f"Added student {payload.first_name} {payload.last_name} ({payload.department})")
 
+        invalidate_analytics_cache()
+
         return {
             "message": "Student created successfully",
             "student_id": payload.student_id,
@@ -314,6 +317,8 @@ def update_student(
         user_name = current_user.get("name", "User")
         log_audit(conn, user_name, "UPDATE_STUDENT", "Student", student_id, f"Updated fields: {list(updates.keys())}")
 
+        invalidate_analytics_cache()
+
         return {
             "message": "Student updated successfully",
             "student": updated_student,
@@ -334,6 +339,8 @@ def delete_student(
         cursor.execute("DELETE FROM students WHERE student_id = ?;", (student_id,))
         user_name = current_user.get("name", "Admin")
         log_audit(conn, user_name, "DELETE_STUDENT", "Student", student_id, f"Deleted student record for {student['first_name']} {student['last_name']}")
+
+        invalidate_analytics_cache()
 
         return {"message": f"Student {student_id} deleted successfully"}
 
@@ -406,6 +413,8 @@ async def import_students_csv(
             INSERT INTO audit_logs (user_name, action, entity_type, entity_id, details)
             VALUES (?, ?, ?, ?, ?);
         """, ("System User", "CSV_IMPORT", "Students", "Bulk", f"Imported {imported} student records via CSV"))
+
+    invalidate_analytics_cache()
 
     return {
         "message": f"Successfully imported {imported} students",

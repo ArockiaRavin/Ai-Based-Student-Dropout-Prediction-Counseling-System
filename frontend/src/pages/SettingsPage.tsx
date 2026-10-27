@@ -21,30 +21,30 @@ import { useAuth } from '../context/AuthContext';
 
 export const SettingsPage: React.FC = () => {
   const { user, role, loginAs, canManageSettings } = useAuth();
-  const [settings, setSettings] = useState<any>({
+  const cachedSettings = api.getCached<{ settings: any; audit_logs: any[]; database_stats: any }>('/settings');
+  const [settings, setSettings] = useState<any>(() => ({
     institution_name: 'National Institute of Engineering & Technology',
     academic_year: '2026 - 2027',
     active_ml_model: 'Random Forest',
     high_risk_threshold: '65.0',
     medium_risk_threshold: '35.0',
     email_notifications_enabled: 'true',
-    auto_alert_counselor: 'true'
-  });
-  const [stats, setStats] = useState<any>(null);
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+    auto_alert_counselor: 'true',
+    ...(cachedSettings?.settings || {})
+  }));
+  const [stats, setStats] = useState<any>(cachedSettings?.database_stats || null);
+  const [auditLogs, setAuditLogs] = useState<any[]>(cachedSettings?.audit_logs || []);
+  const [loading, setLoading] = useState(!cachedSettings);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
+  const loadSettings = async (silent = false) => {
     try {
-      setLoading(true);
-      const res = await api.getSettings();
+      if (!silent) {
+        setLoading(true);
+      }
+      const res = await api.getSettings(!silent);
       if (res.settings) {
         setSettings((prev: any) => ({ ...prev, ...res.settings }));
       }
@@ -56,6 +56,10 @@ export const SettingsPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadSettings(Boolean(cachedSettings));
+  }, []);
 
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setMessage({ text, type });

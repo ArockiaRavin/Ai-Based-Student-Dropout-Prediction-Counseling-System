@@ -11,7 +11,87 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
-async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const apiCache = new Map<string, CacheEntry<any>>();
+
+export function getCached<T>(endpoint: string): T | null {
+  const item = apiCache.get(endpoint);
+  return item ? (item.data as T) : null;
+}
+
+export function setCached<T>(endpoint: string, data: T): void {
+  apiCache.set(endpoint, { data, timestamp: Date.now() });
+}
+
+export function invalidateCache(pattern?: string): void {
+  if (!pattern) {
+    apiCache.clear();
+    return;
+  }
+  for (const key of apiCache.keys()) {
+    if (key.includes(pattern)) {
+      apiCache.delete(key);
+    }
+  }
+}
+
+function autoInvalidate(endpoint: string, method: string = 'GET') {
+  if (method === 'GET') return;
+  if (endpoint.includes('/students')) {
+    invalidateCache('/students');
+    invalidateCache('/analytics');
+    invalidateCache('/reports');
+  }
+  if (endpoint.includes('/predictions')) {
+    invalidateCache('/predictions');
+    invalidateCache('/students');
+    invalidateCache('/analytics');
+  }
+  if (endpoint.includes('/counseling')) {
+    invalidateCache('/counseling');
+    invalidateCache('/students');
+    invalidateCache('/analytics');
+  }
+  if (endpoint.includes('/interventions')) {
+    invalidateCache('/interventions');
+    invalidateCache('/students');
+    invalidateCache('/analytics');
+  }
+  if (endpoint.includes('/settings')) {
+    invalidateCache('/settings');
+    invalidateCache('/analytics');
+  }
+  if (endpoint.includes('/auth') || endpoint.includes('/users')) {
+    invalidateCache('/auth/me');
+    invalidateCache('/users');
+  }
+  if (endpoint.includes('/model')) {
+    invalidateCache('/model');
+    invalidateCache('/predictions');
+    invalidateCache('/analytics');
+  }
+}
+
+async function request<T>(
+  endpoint: string,
+  options?: RequestInit,
+  ttlMs: number = 0,
+  forceRefresh: boolean = false
+): Promise<T> {
+  const method = (options?.method || 'GET').toUpperCase();
+
+  // Cache lookup for GET
+  if (method === 'GET' && ttlMs > 0 && !forceRefresh) {
+    const cached = apiCache.get(endpoint);
+    if (cached && Date.now() - cached.timestamp < ttlMs) {
+      return cached.data as T;
+    }
+  }
+
   const url = `${API_BASE}${endpoint}`;
   const token = localStorage.getItem('eduretain_token');
   
@@ -31,14 +111,48 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     });
 
     if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      const error = new Error(errorData.detail || `Request failed with status ${res.status}`);
+      const errorText = await res.text().catch(() => '');
+      let errorDetail = `Request failed with status ${res.status}`;
+      if (errorText) {
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData?.detail) {
+            errorDetail = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+          } else if (errorData?.message) {
+            errorDetail = errorData.message;
+          }
+        } catch {
+          if (errorText.length < 200) {
+            errorDetail = errorText;
+          }
+        }
+      }
+      const error = new Error(errorDetail);
       (error as any).status = res.status;
       (error as any).statusText = res.statusText;
       throw error;
     }
 
-    return await res.json();
+    if (res.status === 204 || res.headers.get('content-length') === '0') {
+      autoInvalidate(endpoint, method);
+      return {} as T;
+    }
+
+    const text = await res.text();
+    if (!text || !text.trim()) {
+      autoInvalidate(endpoint, method);
+      return {} as T;
+    }
+
+    const result = JSON.parse(text);
+
+    if (method === 'GET' && ttlMs > 0) {
+      apiCache.set(endpoint, { data: result, timestamp: Date.now() });
+    } else {
+      autoInvalidate(endpoint, method);
+    }
+
+    return result as T;
   } catch (err: any) {
     console.error(`API Error on ${endpoint}:`, err);
     throw err;
@@ -46,6 +160,11 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // Cache utility helpers
+  getCached,
+  setCached,
+  invalidateCache,
+
   // Health
   checkHealth: () => request<{ status: string; ml_models_ready: boolean; active_model: string }>('/health'),
 
@@ -62,7 +181,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  getMe: () => request<{ user: User }>('/auth/me'),
+  getMe: (forceRefresh = false) => request<{ user: User }>('/auth/me', undefined, 30000, forceRefresh),
 
   getSetupAdminStatus: () =>
     request<{ setup_available: boolean; message: string }>('/auth/setup-admin/status'),
@@ -104,10 +223,12 @@ export const api = {
       body: JSON.stringify({ email }),
     }),
 
-  logout: () =>
-    request<{ message: string }>('/auth/logout', {
+  logout: () => {
+    invalidateCache();
+    return request<{ message: string }>('/auth/logout', {
       method: 'POST',
-    }),
+    });
+  },
 
   updateProfile: (data: { name?: string; department?: string; current_password?: string; new_password?: string }) =>
     request<{ message: string; user: User }>('/auth/me', {
@@ -116,9 +237,9 @@ export const api = {
     }),
 
   // User Management (Admin Only)
-  getUsers: () => request<{ users: User[]; total: number }>('/users'),
+  getUsers: (forceRefresh = false) => request<{ users: User[]; total: number }>('/users', undefined, 15000, forceRefresh),
 
-  getUserDetails: (userId: number) => request<{ user: User }>(`/users/${userId}`),
+  getUserDetails: (userId: number, forceRefresh = false) => request<{ user: User }>(`/users/${userId}`, undefined, 15000, forceRefresh),
 
   createUser: (data: {
     username?: string;
@@ -158,32 +279,37 @@ export const api = {
       method: 'DELETE',
     }),
 
-  getNotifications: () =>
-    request<{ notifications: NotificationItem[]; unread_count: number }>('/notifications'),
+  getNotifications: (forceRefresh = false) =>
+    request<{ notifications: NotificationItem[]; unread_count: number }>('/notifications', undefined, 10000, forceRefresh),
 
   markNotificationRead: (id: number) =>
     request<{ message: string }>(`/notifications/${id}/read`, { method: 'PUT' }),
 
   // Dashboard
-  getDashboardSummary: () => request<DashboardSummary>('/analytics/dashboard-summary'),
+  getDashboardSummary: (forceRefresh = false) =>
+    request<DashboardSummary>('/analytics/dashboard-summary', undefined, 15000, forceRefresh),
 
   // Risk Analysis
-  getRiskAnalysis: (department?: string, semester?: number) => {
+  getRiskAnalysis: (department?: string, semester?: number, forceRefresh = false) => {
     const params = new URLSearchParams();
     if (department) params.append('department', department);
     if (semester) params.append('semester', semester.toString());
-    return request<any>(`/analytics/risk-analysis?${params.toString()}`);
+    const ep = `/analytics/risk-analysis?${params.toString()}`;
+    return request<any>(ep, undefined, 20000, forceRefresh);
   },
 
   // Students
-  getStudents: (params?: {
-    search?: string;
-    department?: string;
-    semester?: number;
-    risk_level?: string;
-    sort_by?: string;
-    sort_order?: string;
-  }) => {
+  getStudents: (
+    params?: {
+      search?: string;
+      department?: string;
+      semester?: number;
+      risk_level?: string;
+      sort_by?: string;
+      sort_order?: string;
+    },
+    forceRefresh = false
+  ) => {
     const query = new URLSearchParams();
     if (params?.search) query.append('search', params.search);
     if (params?.department) query.append('department', params.department);
@@ -191,17 +317,18 @@ export const api = {
     if (params?.risk_level) query.append('risk_level', params.risk_level);
     if (params?.sort_by) query.append('sort_by', params.sort_by);
     if (params?.sort_order) query.append('sort_order', params.sort_order);
-    return request<{ students: Student[]; total: number }>(`/students?${query.toString()}`);
+    const ep = `/students?${query.toString()}`;
+    return request<{ students: Student[]; total: number }>(ep, undefined, 15000, forceRefresh);
   },
 
-  getStudent: (studentId: string) =>
+  getStudent: (studentId: string, forceRefresh = false) =>
     request<{
       student: Student;
       latest_prediction?: PredictionRecord | null;
       predictions_history: PredictionRecord[];
       counseling_sessions: CounselingSession[];
       interventions: Intervention[];
-    }>(`/students/${studentId}`),
+    }>(`/students/${studentId}`, undefined, 20000, forceRefresh),
 
   createStudent: (studentData: any) =>
     request<{ message: string; student_id: string; prediction: any }>('/students', {
@@ -223,25 +350,50 @@ export const api = {
   importStudentsCsv: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
+    const token = localStorage.getItem('eduretain_token');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`${API_BASE}/students/import`, {
       method: 'POST',
+      headers,
       body: formData,
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Import failed');
+      const errorText = await res.text().catch(() => '');
+      let errorDetail = 'Import failed';
+      if (errorText) {
+        try {
+          const err = JSON.parse(errorText);
+          if (err?.detail) {
+            errorDetail = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+          }
+        } catch {
+          if (errorText.length < 200) errorDetail = errorText;
+        }
+      }
+      throw new Error(errorDetail);
     }
-    return await res.json();
+
+    autoInvalidate('/students/import', 'POST');
+
+    const text = await res.text();
+    if (!text || !text.trim()) {
+      return { message: 'Import completed successfully' };
+    }
+    return JSON.parse(text);
   },
 
   getExportCsvUrl: () => `${API_BASE}/students/export/csv`,
 
   // Predictions
-  getPredictions: (studentId?: string, riskCategory?: string) => {
+  getPredictions: (studentId?: string, riskCategory?: string, forceRefresh = false) => {
     const query = new URLSearchParams();
     if (studentId) query.append('student_id', studentId);
     if (riskCategory) query.append('risk_category', riskCategory);
-    return request<{ predictions: any[]; total: number }>(`/predictions?${query.toString()}`);
+    return request<{ predictions: any[]; total: number }>(`/predictions?${query.toString()}`, undefined, 15000, forceRefresh);
   },
 
   runPrediction: (input: {
@@ -261,15 +413,16 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  getPredictionDetail: (id: number) => request<any>(`/predictions/${id}`),
+  getPredictionDetail: (id: number, forceRefresh = false) =>
+    request<any>(`/predictions/${id}`, undefined, 20000, forceRefresh),
 
   // Counseling
-  getCounselingSessions: (studentId?: string, status?: string, supportCategory?: string) => {
+  getCounselingSessions: (studentId?: string, status?: string, supportCategory?: string, forceRefresh = false) => {
     const query = new URLSearchParams();
     if (studentId) query.append('student_id', studentId);
     if (status) query.append('status', status);
     if (supportCategory) query.append('support_category', supportCategory);
-    return request<{ sessions: CounselingSession[]; total: number }>(`/counseling/sessions?${query.toString()}`);
+    return request<{ sessions: CounselingSession[]; total: number }>(`/counseling/sessions?${query.toString()}`, undefined, 15000, forceRefresh);
   },
 
   createCounselingSession: (data: Partial<CounselingSession>) =>
@@ -284,15 +437,16 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  getCounselorOverview: () => request<any>('/counseling/overview'),
+  getCounselorOverview: (forceRefresh = false) =>
+    request<any>('/counseling/overview', undefined, 15000, forceRefresh),
 
   // Interventions
-  getInterventions: (status?: string, category?: string, studentId?: string) => {
+  getInterventions: (status?: string, category?: string, studentId?: string, forceRefresh = false) => {
     const query = new URLSearchParams();
     if (status) query.append('status', status);
     if (category) query.append('category', category);
     if (studentId) query.append('student_id', studentId);
-    return request<{ interventions: Intervention[]; summary: any }>(`/interventions?${query.toString()}`);
+    return request<{ interventions: Intervention[]; summary: any }>(`/interventions?${query.toString()}`, undefined, 15000, forceRefresh);
   },
 
   createIntervention: (data: Partial<Intervention>) =>
@@ -308,7 +462,8 @@ export const api = {
     }),
 
   // Model Insights
-  getModelInsights: () => request<ModelInsights>('/model/insights'),
+  getModelInsights: (forceRefresh = false) =>
+    request<ModelInsights>('/model/insights', undefined, 30000, forceRefresh),
 
   setActiveModel: (modelName: string) =>
     request<{ message: string }>('/model/set-active', {
@@ -336,7 +491,8 @@ export const api = {
   },
 
   // Settings
-  getSettings: () => request<{ settings: any; audit_logs: any[]; database_stats: any }>('/settings'),
+  getSettings: (forceRefresh = false) =>
+    request<{ settings: any; audit_logs: any[]; database_stats: any }>('/settings', undefined, 30000, forceRefresh),
 
   updateSettings: (settings: any) =>
     request<{ message: string }>('/settings', {

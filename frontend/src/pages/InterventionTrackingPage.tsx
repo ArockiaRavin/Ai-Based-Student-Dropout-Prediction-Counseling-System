@@ -22,8 +22,9 @@ import { KPICard } from '../components/KPICard';
 
 export const InterventionTrackingPage: React.FC = () => {
   const { user, canManageInterventions } = useAuth();
-  const [interventions, setInterventions] = useState<Intervention[]>([]);
-  const [summary, setSummary] = useState<any>({
+  const cachedInterventions = api.getCached<{ interventions: Intervention[]; summary: any }>('/interventions?');
+  const [interventions, setInterventions] = useState<Intervention[]>(cachedInterventions?.interventions || []);
+  const [summary, setSummary] = useState<any>(cachedInterventions?.summary || {
     total: 0,
     completed: 0,
     in_progress: 0,
@@ -32,13 +33,14 @@ export const InterventionTrackingPage: React.FC = () => {
     new: 0
   });
   const [statusFilter, setStatusFilter] = useState('All');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedInterventions);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedIntervention, setSelectedIntervention] = useState<Intervention | null>(null);
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<Student[]>(() => api.getCached<{ students: Student[]; total: number }>('/students?sort_by=id&sort_order=asc')?.students || []);
 
   const [form, setForm] = useState({
     student_id: '',
@@ -51,23 +53,31 @@ export const InterventionTrackingPage: React.FC = () => {
     outcome_notes: ''
   });
 
-  useEffect(() => {
-    loadInterventions();
-    api.getStudents().then(res => setStudents(res.students || [])).catch(() => {});
-  }, [statusFilter]);
-
-  const loadInterventions = async () => {
+  const loadInterventions = async (silent = false) => {
     try {
-      setLoading(true);
-      const res = await api.getInterventions(statusFilter !== 'All' ? statusFilter : undefined);
+      if (!silent || !interventions.length) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+      const res = await api.getInterventions(statusFilter !== 'All' ? statusFilter : undefined, undefined, undefined, !silent);
       setInterventions(res.interventions || []);
       setSummary(res.summary || {});
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    const isDefault = statusFilter === 'All';
+    loadInterventions(isDefault && Boolean(cachedInterventions));
+    if (students.length === 0) {
+      api.getStudents().then(res => setStudents(res.students || [])).catch(() => {});
+    }
+  }, [statusFilter]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

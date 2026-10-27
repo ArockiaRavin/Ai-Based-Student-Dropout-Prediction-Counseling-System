@@ -25,9 +25,11 @@ import { useAuth } from '../context/AuthContext';
 export const StudentsPage: React.FC = () => {
   const { canEditStudents, canDeleteStudents } = useAuth();
 
-  const [students, setStudents] = useState<Student[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const cachedInitial = api.getCached<{ students: Student[]; total: number }>('/students?sort_by=id&sort_order=asc');
+  const [students, setStudents] = useState<Student[]>(cachedInitial?.students || []);
+  const [total, setTotal] = useState(cachedInitial?.total || 0);
+  const [loading, setLoading] = useState(!cachedInitial);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Filters & Search
   const [search, setSearch] = useState('');
@@ -64,13 +66,13 @@ export const StudentsPage: React.FC = () => {
 
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  useEffect(() => {
-    fetchStudents();
-  }, [search, department, semester, riskLevel, sortBy, sortOrder]);
-
-  const fetchStudents = async () => {
+  const fetchStudents = async (silent = false) => {
     try {
-      setLoading(true);
+      if (students.length === 0 || !silent) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       const res = await api.getStudents({
         search: search.trim() || undefined,
         department: department !== 'All' ? department : undefined,
@@ -78,16 +80,24 @@ export const StudentsPage: React.FC = () => {
         risk_level: riskLevel !== 'All' ? riskLevel : undefined,
         sort_by: sortBy,
         sort_order: sortOrder
-      });
+      }, !silent);
       setStudents(res.students || []);
       setTotal(res.total || 0);
     } catch (err: any) {
       console.error(err);
-      showNotification('Failed to fetch students', 'error');
+      if (students.length === 0) {
+        showNotification('Failed to fetch students', 'error');
+      }
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    const isDefault = !search && department === 'All' && semester === 'All' && riskLevel === 'All' && sortBy === 'id' && sortOrder === 'asc';
+    fetchStudents(isDefault && Boolean(cachedInitial));
+  }, [search, department, semester, riskLevel, sortBy, sortOrder]);
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -232,6 +242,12 @@ export const StudentsPage: React.FC = () => {
               <Users className="w-6 h-6" />
             </div>
             <span>Student Cohort Management</span>
+            {isRefreshing && (
+              <span className="flex items-center gap-1.5 text-xs text-cyan-300 font-medium px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 animate-pulse">
+                <RefreshCw className="w-3 h-3 animate-spin text-cyan-400" />
+                <span>Updating records...</span>
+              </span>
+            )}
             {!canEditStudents && (
               <span className="text-[10px] font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 uppercase font-mono">
                 Read-Only Viewer

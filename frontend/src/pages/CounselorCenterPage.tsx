@@ -21,14 +21,18 @@ import { useAuth } from '../context/AuthContext';
 
 export const CounselorCenterPage: React.FC = () => {
   const { user, canEditStudents } = useAuth();
-  const [sessions, setSessions] = useState<CounselingSession[]>([]);
-  const [priorityCases, setPriorityCases] = useState<any[]>([]);
-  const [upcomingFollowups, setUpcomingFollowups] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedSessions = api.getCached<{ sessions: CounselingSession[]; total: number }>('/counseling/sessions?');
+  const cachedOverview = api.getCached<any>('/counseling/overview');
+
+  const [sessions, setSessions] = useState<CounselingSession[]>(cachedSessions?.sessions || []);
+  const [priorityCases, setPriorityCases] = useState<any[]>(cachedOverview?.priority_cases || []);
+  const [upcomingFollowups, setUpcomingFollowups] = useState<any[]>(cachedOverview?.upcoming_followups || []);
+  const [loading, setLoading] = useState(!cachedSessions || !cachedOverview);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // New Session Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [students, setStudents] = useState<Student[]>([]);
+  const [students, setStudents] = useState<Student[]>(() => api.getCached<{ students: Student[]; total: number }>('/students?sort_by=id&sort_order=asc')?.students || []);
   const [form, setForm] = useState({
     student_id: '',
     counselor_name: user?.name || 'Prof. Sunita Krishnan',
@@ -43,26 +47,36 @@ export const CounselorCenterPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadCounselorHub();
-    api.getStudents().then(res => setStudents(res.students || [])).catch(() => {});
+    const hasCache = Boolean(cachedSessions && cachedOverview);
+    loadCounselorHub(hasCache);
+    if (students.length === 0) {
+      api.getStudents().then(res => setStudents(res.students || [])).catch(() => {});
+    }
   }, []);
 
-  const loadCounselorHub = async () => {
+  const loadCounselorHub = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent || (!sessions.length && !priorityCases.length)) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       setError(null);
       const [sessionsRes, overviewRes] = await Promise.all([
-        api.getCounselingSessions(),
-        api.getCounselorOverview()
+        api.getCounselingSessions(undefined, undefined, undefined, !silent),
+        api.getCounselorOverview(!silent)
       ]);
       setSessions(sessionsRes.sessions || []);
       setPriorityCases(overviewRes.priority_cases || []);
       setUpcomingFollowups(overviewRes.upcoming_followups || []);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to load counselor center records');
+      if (!sessions.length && !priorityCases.length) {
+        setError(err.message || 'Failed to load counselor center records');
+      }
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -128,7 +142,7 @@ export const CounselorCenterPage: React.FC = () => {
           <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
           <p className="text-xs text-slate-400">{error}</p>
           <button
-            onClick={loadCounselorHub}
+            onClick={() => loadCounselorHub(false)}
             className="px-4 py-2 bg-indigo-600/50 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2"
           >
             <RefreshCw className="w-3.5 h-3.5" />

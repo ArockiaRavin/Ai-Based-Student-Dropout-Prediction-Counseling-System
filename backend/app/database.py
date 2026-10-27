@@ -191,10 +191,46 @@ class PostgresConnectionWrapper:
     def close(self):
         self._conn.close()
 
+_pg_pool: Optional[Any] = None
+
+def _get_pg_pool():
+    global _pg_pool
+    if _pg_pool is None and IS_POSTGRES:
+        try:
+            from psycopg2 import pool
+            _pg_pool = pool.ThreadedConnectionPool(
+                minconn=2,
+                maxconn=10,
+                dsn=DATABASE_URL,
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=5
+            )
+        except Exception as e:
+            print(f"Warning: Failed to initialize ThreadedConnectionPool: {e}")
+            _pg_pool = None
+    return _pg_pool
+
 @contextmanager
 def get_db() -> Generator[Any, None, None]:
     if IS_POSTGRES:
-        conn = psycopg2.connect(DATABASE_URL)
+        pool_inst = _get_pg_pool()
+        conn = None
+        is_from_pool = False
+
+        if pool_inst is not None:
+            try:
+                conn = pool_inst.getconn()
+                if conn.closed != 0:
+                    conn = pool_inst.getconn()
+                is_from_pool = True
+            except Exception:
+                conn = psycopg2.connect(DATABASE_URL)
+                is_from_pool = False
+        else:
+            conn = psycopg2.connect(DATABASE_URL)
+
         wrapped_conn = PostgresConnectionWrapper(conn)
         try:
             yield wrapped_conn
@@ -203,7 +239,19 @@ def get_db() -> Generator[Any, None, None]:
             wrapped_conn.rollback()
             raise
         finally:
-            wrapped_conn.close()
+            if is_from_pool and pool_inst is not None and conn is not None:
+                try:
+                    pool_inst.putconn(conn)
+                except Exception:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+            elif conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
     else:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = dict_factory

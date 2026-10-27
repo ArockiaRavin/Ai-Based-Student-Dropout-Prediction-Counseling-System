@@ -25,12 +25,21 @@ def get_settings(current_user: Optional[Dict[str, Any]] = Depends(get_optional_u
                 LIMIT 50;
             """).fetchall()
 
-        # Database statistics
-        student_count = cursor.execute("SELECT COUNT(*) as c FROM students;").fetchone()["c"]
-        pred_count = cursor.execute("SELECT COUNT(*) as c FROM predictions;").fetchone()["c"]
-        session_count = cursor.execute("SELECT COUNT(*) as c FROM counseling_sessions;").fetchone()["c"]
-        int_count = cursor.execute("SELECT COUNT(*) as c FROM interventions;").fetchone()["c"]
-        user_count = cursor.execute("SELECT COUNT(*) as c FROM users;").fetchone()["c"]
+        # Database statistics in a single batched query
+        stats = cursor.execute("""
+            SELECT 
+                (SELECT COUNT(*) FROM students) as student_count,
+                (SELECT COUNT(*) FROM predictions) as pred_count,
+                (SELECT COUNT(*) FROM counseling_sessions) as session_count,
+                (SELECT COUNT(*) FROM interventions) as int_count,
+                (SELECT COUNT(*) FROM users) as user_count;
+        """).fetchone() or {}
+
+        student_count = stats.get("student_count", 0)
+        pred_count = stats.get("pred_count", 0)
+        session_count = stats.get("session_count", 0)
+        int_count = stats.get("int_count", 0)
+        user_count = stats.get("user_count", 0)
 
         return {
             "settings": settings_dict,

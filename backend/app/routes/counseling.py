@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 from app.database import get_db
 from app.models import CounselingSessionCreate, CounselingSessionResponse
 from app.auth_utils import require_role, log_audit
+from app.routes.analytics import invalidate_analytics_cache
 
 router = APIRouter(prefix="/counseling", tags=["counseling"])
 
@@ -81,6 +82,8 @@ def create_counseling_session(
         user_name = current_user.get("name", payload.counselor_name)
         log_audit(conn, user_name, "RECORD_COUNSELING", "CounselingSession", str(session_id), f"Recorded session for {student['first_name']} {student['last_name']} under {payload.support_category}")
 
+        invalidate_analytics_cache()
+
         return {
             "message": "Counseling session recorded successfully",
             "session_id": session_id
@@ -108,6 +111,7 @@ def update_counseling_session(
         if updates:
             params.append(session_id)
             cursor.execute(f"UPDATE counseling_sessions SET {', '.join(updates)} WHERE id = ?;", params)
+            invalidate_analytics_cache()
 
         return {"message": "Session updated successfully"}
 
